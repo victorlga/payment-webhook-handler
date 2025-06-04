@@ -1,5 +1,62 @@
+/target
+/classes
+/checkouts
+profiles.clj
+pom.xml
+pom.xml.asc
+*.jar
 *.class
-*.log
+/.lein-*
+/.nrepl-port
+/.prepl-port
+.hgignore
+.hg/
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
+
+# Clojure/Leiningen .gitignore
+
+# Lein build artifacts
+/target
+/classes
+/checkouts
+pom.xml
+pom.xml.asc
+*.jar
+*.class
+/lib
+
+# Lein profiles
+.lein-repl-history
+.lein-failures
+.lein-deps-sum
+.lein-plugins
+.lein-env
+
+# Clojure CLI (deps.edn) artifacts
+/.cpcache
+/.clj-kondo
+/.lsp
+
+# Logs
+*.log
+/logs
+
+# Editor and IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+.nrepl-port
+.nrepl-history
+
+# macOS system files
+.DS_Store
+
+# Dependency directories
+deps/
+node_modules/
+
+# Other common ignores
+/out
+/resources/public/js/compiled
