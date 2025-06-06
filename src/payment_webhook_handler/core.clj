@@ -1,6 +1,6 @@
 (ns payment-webhook-handler.core
   (:require [ring.adapter.jetty :refer [run-jetty]]
-            [ring.util.response :refer [response]]
+            [ring.util.response :refer [response bad-request]]
             [ring.middleware.json :refer [wrap-json-body]]
             [compojure.core :refer [defroutes POST]]
             [compojure.route :refer [not-found]])
@@ -8,8 +8,17 @@
 
 (defn webhook-handler
   [request]
-  (println "Received webhook:" (:body request))
-  (response "Webhook received!"))
+  (let [token (get-in request [:headers "x-webhook-token"])
+        expected-token "meu-token-secreto"]
+    (if (= token expected-token)
+      (do
+        (println "Received webhook:" (:body request))
+        (confirm-webhook)
+        (response "Webhook received!")
+        )
+      (do
+        (println "Invalid token:" token)
+        (bad-request "Invalid or missing token")))))
 
 (defroutes app-routes
   (POST "/webhook" request (webhook-handler request))
