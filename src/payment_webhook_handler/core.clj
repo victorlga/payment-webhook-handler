@@ -10,23 +10,18 @@
   (:gen-class))
 
 
-(defn cancel-transaction
+(defn cancel-transaction!
   [transaction-id]
   (try
     (let [response (post "http://127.0.0.1:5001/cancelar"
-                         {:body (generate-string {:transaction-id transaction-id})
+                         {:body (generate-string {:transaction_id transaction-id})
                           :headers {"Content-Type" "application/json"}
                           :throw-exceptions false})]
       (println "Cancelation response status:" (:status response)))
     (catch Exception e
       (println "Exception occurred while canceling:" (.getMessage e)))))
 
-
-
-;; Teste
-
-
-(defn confirm-transaction
+(defn confirm-transaction!
   [transaction-id]
   (try
     (let [response (post "http://127.0.0.1:5001/confirmar"
@@ -56,16 +51,14 @@
         transaction-id (get-in request [:body :transaction_id])]
 
     (cond
-      (not= token expected-token) (do
-                                    (println "Invalid token:" token)
-                                    (bad-request "Invalid or missing token"))
-      (not (insert-transaction! transaction-id)) (do
-                                                   (println "Duplicate transaction:" transaction-id)
-                                                   (bad-request "Duplicate transaction"))
-      (get-in request [:body :amount]) ()
+      (not= token expected-token) (bad-request "Invalid or missing token")
+      (not (insert-transaction! transaction-id)) (bad-request "Duplicate transaction")
+      (not= "49.90" (get-in request [:body :amount])) (do
+                                                        (cancel-transaction! transaction-id)
+                                                        (bad-request "Wrong amount"))
       :else (do
               (println "Received webhook:" (:body request))
-              (confirm-transaction transaction-id)
+              (confirm-transaction! transaction-id)
               (response "OK")))))
 
 
