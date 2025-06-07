@@ -43,22 +43,29 @@
     (catch org.sqlite.SQLiteException e
       false)))
 
+(defn payload-incomplete?
+  [body]
+  (let [{:keys [event amount currency timestamp]} body]
+    (some nil? [event amount currency timestamp])))
 
 (defn webhook-handler
   [request]
   (let [token (get-in request [:headers "x-webhook-token"])
         expected-token "meu-token-secreto"
-        transaction-id (get-in request [:body :transaction_id])]
-
+        body (:body request)
+        transaction-id (:transaction_id body)]
     (cond
       (not= token expected-token) (bad-request "Invalid or missing token")
       (nil? transaction-id) (bad-request "Invalid body request")
       (not (insert-transaction! transaction-id)) (bad-request "Duplicate transaction")
-      (not= "49.90" (get-in request [:body :amount])) (do
-                                                        (cancel-transaction! transaction-id)
-                                                        (bad-request "Wrong amount"))
+      (payload-incomplete? body) (do
+                                   (cancel-transaction! transaction-id)
+                                   (bad-request "Payload is incomplete"))
+      (not= "49.90" (:amount body)) (do
+                                      (cancel-transaction! transaction-id)
+                                      (bad-request "Wrong amount"))
       :else (do
-              (println "Received webhook:" (:body request))
+              (println "Received webhook:" body)
               (confirm-transaction! transaction-id)
               (response "OK")))))
 
