@@ -52,6 +52,7 @@
 
     (cond
       (not= token expected-token) (bad-request "Invalid or missing token")
+      (nil? transaction-id) (bad-request "Invalid body request")
       (not (insert-transaction! transaction-id)) (bad-request "Duplicate transaction")
       (not= "49.90" (get-in request [:body :amount])) (do
                                                         (cancel-transaction! transaction-id)
