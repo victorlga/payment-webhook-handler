@@ -32,7 +32,6 @@
     (catch Exception e
       (println "Exception occurred while confirming:" (.getMessage e)))))
 
-
 (def db {:dbtype "sqlite"
          :dbname "data/transactions.db"})
 
@@ -40,7 +39,7 @@
   (try
     (jdbc/insert! db :transactions {:transaction_id transaction-id})
     true
-    (catch org.sqlite.SQLiteException e
+    (catch org.sqlite.SQLiteException _
       false)))
 
 (defn payload-incomplete?
@@ -54,6 +53,7 @@
         expected-token "meu-token-secreto"
         body (:body request)
         transaction-id (:transaction_id body)]
+    (println "Received webhook:" body)
     (cond
       (not= token expected-token) (bad-request "Invalid or missing token")
       (nil? transaction-id) (bad-request "Invalid body request")
@@ -65,10 +65,8 @@
                                       (cancel-transaction! transaction-id)
                                       (bad-request "Wrong amount"))
       :else (do
-              (println "Received webhook:" body)
               (confirm-transaction! transaction-id)
               (response "OK")))))
-
 
 (defroutes app-routes
   (POST "/webhook" request (webhook-handler request))
@@ -77,10 +75,23 @@
 (def app
   (wrap-json-body app-routes {:keywords? true}))
 
-(defn -main
-  [& args]
+(defn -main [& _]
   (jdbc/execute! db ["DROP TABLE IF EXISTS transactions"])
   (jdbc/execute! db ["CREATE TABLE transactions (transaction_id TEXT PRIMARY KEY)"])
-  
-  (println "\n\nStarting payment webhook handler on port 5000...\n\n")
-  (run-jetty app {:port 5000 :host "127.0.0.1" :join? false}))
+
+  ;; Servidor HTTP (sem SSL) na porta 5000
+  (future
+    (run-jetty app
+               {:port 5000
+                :host "127.0.0.1"
+                :join? false}))
+
+  ;; Servidor HTTPS na porta 5443
+  (run-jetty app
+             {:ssl? true
+              :ssl-port 5443
+              :keystore "keystore.p12"
+              :key-password "changeit"
+              :join? true}))
+
+

@@ -11,7 +11,8 @@
                  [ring/ring-json "0.5.1"]
                  [clj-http "3.13.0"]
                  [cheshire "5.12.0"]
-                 [compojure "1.7.1"]]
+                 [compojure "1.7.1"]
+                ]
   :main ^:skip-aot payment-webhook-handler.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all
