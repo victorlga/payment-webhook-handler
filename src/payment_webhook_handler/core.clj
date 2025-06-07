@@ -5,7 +5,8 @@
             [compojure.core :refer [defroutes POST]]
             [compojure.route :refer [not-found]]
             [clj-http.client :refer [post]]
-            [cheshire.core :refer [generate-string]])
+            [cheshire.core :refer [generate-string]]
+            [clojure.java.jdbc :as jdbc])
   (:gen-class))
 
 
@@ -36,25 +37,36 @@
     (catch Exception e
       (println "Exception occurred while confirming:" (.getMessage e)))))
 
+
+(def db {:dbtype "sqlite"
+         :dbname "data/transactions.db"})
+
+(defn insert-transaction! [transaction-id]
+  (try
+    (jdbc/insert! db :transactions {:transaction_id transaction-id})
+    true
+    (catch org.sqlite.SQLiteException e
+      false)))
+
+
 (defn webhook-handler
   [request]
   (let [token (get-in request [:headers "x-webhook-token"])
-        expected-token "meu-token-secreto"]
-    (if (= token expected-token)
-      (do
-        (println "Received webhook:" (:body request))
-        ;; Se ID duplicado, bad request. Se não, response sucess and confirmation
-        
-        ;;
-        (confirm-transaction (get-in request [:body :transaction_id]))
-        (response "OK")
-        )
-      (do
-        (println "Invalid token:" token)
-        (bad-request "Invalid or missing token")))))
+        expected-token "meu-token-secreto"
+        transaction-id (get-in request [:body :transaction_id])]
 
-
-
+    (cond
+      (not= token expected-token) (do
+                                    (println "Invalid token:" token)
+                                    (bad-request "Invalid or missing token"))
+      (not (insert-transaction! transaction-id)) (do
+                                                   (println "Duplicate transaction:" transaction-id)
+                                                   (bad-request "Duplicate transaction"))
+      (get-in request [:body :amount]) ()
+      :else (do
+              (println "Received webhook:" (:body request))
+              (confirm-transaction transaction-id)
+              (response "OK")))))
 
 
 (defroutes app-routes
@@ -66,5 +78,8 @@
 
 (defn -main
   [& args]
+  (jdbc/execute! db ["DROP TABLE IF EXISTS transactions"])
+  (jdbc/execute! db ["CREATE TABLE transactions (transaction_id TEXT PRIMARY KEY)"])
+  
   (println "\n\nStarting payment webhook handler on port 5000...\n\n")
   (run-jetty app {:port 5000 :host "127.0.0.1" :join? false}))
