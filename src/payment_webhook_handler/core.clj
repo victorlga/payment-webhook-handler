@@ -1,7 +1,7 @@
 (ns payment-webhook-handler.core
   (:require [ring.adapter.jetty :refer [run-jetty]]
             [ring.util.response :refer [response bad-request]]
-            [ring.middleware.json :refer [wrap-json-body]]
+            [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [compojure.core :refer [defroutes POST]]
             [compojure.route :refer [not-found]]
             [clj-http.client :refer [post]]
@@ -9,6 +9,10 @@
             [clojure.java.jdbc :as jdbc])
   (:gen-class))
 
+(def db {:dbtype "sqlite"
+         :dbname "data/transactions.db"})
+
+(def expected-token "meu-token-secreto")
 
 (defn cancel-transaction!
   [transaction-id]
@@ -17,7 +21,7 @@
                          {:body (generate-string {:transaction_id transaction-id})
                           :headers {"Content-Type" "application/json"}
                           :throw-exceptions false})]
-      (println "Cancelation response status:" (:status response)))
+      (println "Cancellation response status:" (:status response)))
     (catch Exception e
       (println "Exception occurred while canceling:" (.getMessage e)))))
 
@@ -31,9 +35,6 @@
       (println "Confirmation response status:" (:status response)))
     (catch Exception e
       (println "Exception occurred while confirming:" (.getMessage e)))))
-
-(def db {:dbtype "sqlite"
-         :dbname "data/transactions.db"})
 
 (defn insert-transaction! [transaction-id]
   (try
@@ -50,7 +51,6 @@
 (defn webhook-handler
   [request]
   (let [token (get-in request [:headers "x-webhook-token"])
-        expected-token "meu-token-secreto"
         body (:body request)
         transaction-id (:transaction_id body)]
     (println "Received webhook:" body)
@@ -73,7 +73,9 @@
   (not-found "Route not found"))
 
 (def app
-  (wrap-json-body app-routes {:keywords? true}))
+  (-> app-routes
+      (wrap-json-body {:keywords? true})
+      (wrap-json-response)))
 
 (defn -main [& _]
   (jdbc/execute! db ["DROP TABLE IF EXISTS transactions"])
