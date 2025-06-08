@@ -81,14 +81,12 @@
   (jdbc/execute! db ["DROP TABLE IF EXISTS transactions"])
   (jdbc/execute! db ["CREATE TABLE transactions (transaction_id TEXT PRIMARY KEY)"])
 
-  ;; Servidor HTTP (sem SSL) na porta 5000
   (future
     (run-jetty app
                {:port 5000
                 :host "127.0.0.1"
                 :join? false}))
 
-  ;; Servidor HTTPS na porta 5443
   (run-jetty app
              {:ssl? true
               :ssl-port 5443
