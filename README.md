@@ -31,10 +31,16 @@ docker build -t clojure-webhook-handler -f .devcontainer/Dockerfile .
 
 ### 3. Run the Server
 
-If ports `5000` (HTTP) or `5443` (HTTPS) are in use, **change the exposed ports** (`sink port` → *you probably meant `host port`*).
+If ports `5000` (HTTP) or `5443` (HTTPS) are in use, **change the exposed ports**.
 
 ```bash
 docker run -p 5000:5000 -p 5443:5443 clojure-webhook-handler
+```
+
+For example, if port `5000` is busy and you want to use port `5050` instead:
+
+```bash
+docker run -p 5050:5000 -p 5443:5443 clojure-webhook-handler
 ```
 
 You should see something like:
