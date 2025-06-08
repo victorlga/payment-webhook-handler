@@ -1,0 +1,20 @@
+{
+  "name": "clojure-webhook-handler",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "forwardPorts": [5000, 5001, 5443],
+  "runArgs": [
+    "--init",
+    "-p=5000:5000",
+    "-p=5001:5001",
+    "-p=5443:5443"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

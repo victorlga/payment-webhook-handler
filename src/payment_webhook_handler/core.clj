@@ -17,7 +17,7 @@
 (defn cancel-transaction!
   [transaction-id]
   (try
-    (let [response (post "http://127.0.0.1:5001/cancelar"
+    (let [response (post "http://host.docker.internal:5001/cancelar"
                          {:body (generate-string {:transaction_id transaction-id})
                           :headers {"Content-Type" "application/json"}
                           :throw-exceptions false})]
@@ -28,7 +28,7 @@
 (defn confirm-transaction!
   [transaction-id]
   (try
-    (let [response (post "http://127.0.0.1:5001/confirmar"
+    (let [response (post "http://host.docker.internal:5001/confirmar"
                          {:body (generate-string {:transaction_id transaction-id})
                           :headers {"Content-Type" "application/json"}
                           :throw-exceptions false})]
@@ -84,7 +84,7 @@
   (future
     (run-jetty app
                {:port 5000
-                :host "127.0.0.1"
+                :host "0.0.0.0"
                 :join? false}))
 
   (run-jetty app
@@ -93,5 +93,4 @@
               :keystore "keystore.p12"
               :key-password "changeit"
               :join? true}))
-
 
