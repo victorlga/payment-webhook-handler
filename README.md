@@ -79,9 +79,9 @@ python3 test_webhook.py
 
 ---
 
-## 🔐 Testing HTTPS (WIP)
+## 🔐 Testing HTTPS
 
-> Documentation for HTTPS testing is in progress. Ensure your `keystore.p12` and password (`changeit`) are valid and configured properly.
+To test HTTPS locally, you need to generate a self-signed certificate. Run the following command **in the root of the repository** to create a `keystore.p12` file:
 
 ```bash
 keytool -genkeypair -alias server-key \
@@ -90,6 +90,28 @@ keytool -genkeypair -alias server-key \
   -storepass changeit -keypass changeit \
   -dname "CN=localhost, OU=Dev, O=MyCompany, L=City, S=State, C=BR"
 ```
+
+> This creates a self-signed certificate valid for 365 days, with both the store and key passwords set to `changeit`.
+
+### ✅ Verifying HTTPS is Working
+
+Once the server is running with HTTPS (on port `5443` by default), test it using `curl`:
+
+```bash
+curl -k -X POST https://localhost:5443/webhook \
+  -H "Content-Type: application/json" \
+  -H "x-webhook-token: meu-token-secreto" \
+  -d '{"transaction_id": "test-123", "event": "payment", "amount": "49.90", "currency": "BRL", "timestamp": "2025-06-08T12:00:00Z"}'
+```
+
+* The `-k` flag allows `curl` to skip certificate verification (necessary for self-signed certs).
+* You should receive a response like `"OK"` if the request is accepted.
+
+### ⚠️ Important Notes
+
+* This `curl` request **only validates the HTTPS interface**.
+* The internal HTTP requests to confirm or cancel the transaction **will fail**, because `curl` doesn't run the backend services required to handle those endpoints (`/confirmar`, `/cancelar`).
+* This is expected during basic HTTPS testing.
 
 ---
 
