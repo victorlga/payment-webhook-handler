@@ -1,9 +1,3 @@
-# payment-webhook-handler
-
-Here’s a clean and concise `README.md` for your project:
-
----
-
 # 🧾 Payment Webhook Handler
 
 A Clojure webhook handler for processing and validating payment events with SQLite persistence and HTTP callbacks for confirmation/cancellation.
