@@ -21,6 +21,18 @@ git clone https://github.com/victorlga/payment-webhook-handler.git
 cd payment-webhook-handler
 ```
 
+This project will run a HTTPS server locally. To make this possible, you need to generate a self-signed certificate. Run the following command **in the root of the repository** to create a `keystore.p12` file:
+
+```bash
+keytool -genkeypair -alias server-key \
+  -keyalg RSA -keysize 2048 -storetype PKCS12 \
+  -keystore keystore.p12 -validity 365 \
+  -storepass changeit -keypass changeit \
+  -dname "CN=localhost, OU=Dev, O=MyCompany, L=City, S=State, C=BR"
+```
+
+> This creates a self-signed certificate valid for 365 days, with both the store and key passwords set to `changeit`.
+
 ### 2. Build Docker Image
 
 Make sure Docker is running:
@@ -76,22 +88,6 @@ python3 test_webhook.py
 ```
 
 > ⚠️ If you changed the port during Docker run, make sure to update it in `test_webhook.py`.
-
----
-
-## 🔐 Testing HTTPS
-
-To test HTTPS locally, you need to generate a self-signed certificate. Run the following command **in the root of the repository** to create a `keystore.p12` file:
-
-```bash
-keytool -genkeypair -alias server-key \
-  -keyalg RSA -keysize 2048 -storetype PKCS12 \
-  -keystore keystore.p12 -validity 365 \
-  -storepass changeit -keypass changeit \
-  -dname "CN=localhost, OU=Dev, O=MyCompany, L=City, S=State, C=BR"
-```
-
-> This creates a self-signed certificate valid for 365 days, with both the store and key passwords set to `changeit`.
 
 ### ✅ Verifying HTTPS is Working
 
