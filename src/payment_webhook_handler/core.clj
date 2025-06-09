@@ -53,23 +53,27 @@
   (let [token (get-in request [:headers "x-webhook-token"])
         body (:body request)
         transaction-id (:transaction_id body)]
-    (println "Received webhook:" body)
     (cond
-      (not= token expected-token) (bad-request "Invalid or missing token")
-      (nil? transaction-id) (bad-request "Invalid body request")
-      (not (insert-transaction! transaction-id)) (bad-request "Duplicate transaction")
-      (payload-incomplete? body) (do
-                                   (cancel-transaction! transaction-id)
-                                   (bad-request "Payload is incomplete"))
-      (not= "49.90" (:amount body)) (do
-                                      (cancel-transaction! transaction-id)
-                                      (bad-request "Wrong amount"))
-      :else (do
-              (confirm-transaction! transaction-id)
-              (response "OK")))))
+      (not= token expected-token) {:error "Invalid or missing token"}
+      (nil? transaction-id) {:error "Invalid body request"}
+      (not= "49.90" (:amount body)) {:action :cancel :transaction-id transaction-id :error "Wrong amount" :status 400}
+      (payload-incomplete? body) {:action :cancel :transaction-id transaction-id :error "Payload is incomplete" :status 400}
+      :else {:action :confirm :transaction-id transaction-id})))
+
+(defn execute-effects!
+  [{:keys [action transaction-id error]}]
+  (if error
+    (do
+      (when (= action :cancel) (cancel-transaction! transaction-id))
+      (bad-request error))
+    (if (insert-transaction! transaction-id)
+        (do 
+          (confirm-transaction! transaction-id)
+          (response "OK"))
+        (bad-request "Duplicate transaction"))))
 
 (defroutes app-routes
-  (POST "/webhook" request (webhook-handler request))
+  (POST "/webhook" request (execute-effects! (webhook-handler request)))
   (not-found "Route not found"))
 
 (def app
