@@ -4,92 +4,124 @@
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
             [compojure.core :refer [defroutes POST]]
             [compojure.route :refer [not-found]]
-            [clj-http.client :refer [post]]
-            [cheshire.core :refer [generate-string]]
-            [clojure.java.jdbc :as jdbc])
+            [clj-http.client :as http]
+            [cheshire.core :as json]
+            [clojure.java.jdbc :as jdbc]
+            [cats.monad.either :as either]
+            [cats.core :as m])
   (:gen-class))
 
-(def db {:dbtype "sqlite"
-         :dbname "data/transactions.db"})
+(def db-spec {:dbtype "sqlite"
+              :dbname "data/transactions.db"})
 
-(def expected-token "meu-token-secreto")
+;; ------------------------
+;; HTTP helpers
+;; ------------------------
 
-(defn cancel-transaction!
-  [transaction-id]
+(defn post-json [url payload]
   (try
-    (let [response (post "http://host.docker.internal:5001/cancelar"
-                         {:body (generate-string {:transaction_id transaction-id})
-                          :headers {"Content-Type" "application/json"}
-                          :throw-exceptions false})]
-      (println "Cancellation response status:" (:status response)))
+    (let [res (http/post url {:body (json/generate-string payload)
+                              :headers {"Content-Type" "application/json"}
+                              :throw-exceptions false})]
+      (either/right res))
     (catch Exception e
-      (println "Exception occurred while canceling:" (.getMessage e)))))
+      (either/left (.getMessage e)))))
 
-(defn confirm-transaction!
-  [transaction-id]
-  (try
-    (let [response (post "http://host.docker.internal:5001/confirmar"
-                         {:body (generate-string {:transaction_id transaction-id})
-                          :headers {"Content-Type" "application/json"}
-                          :throw-exceptions false})]
-      (println "Confirmation response status:" (:status response)))
-    (catch Exception e
-      (println "Exception occurred while confirming:" (.getMessage e)))))
+(defn confirm-transaction! [tx-id]
+  (post-json "http://host.docker.internal:5001/confirmar"
+             {:transaction_id tx-id}))
 
-(defn insert-transaction! [transaction-id]
+(defn cancel-transaction! [tx-id]
+  (post-json "http://host.docker.internal:5001/cancelar"
+             {:transaction_id tx-id}))
+
+;; ------------------------
+;; Database helpers
+;; ------------------------
+
+(defn save-transaction! [tx-id]
   (try
-    (jdbc/insert! db :transactions {:transaction_id transaction-id})
-    true
+    (jdbc/insert! db-spec :transactions {:transaction_id tx-id})
+    (either/right :ok)
     (catch org.sqlite.SQLiteException _
-      false)))
+      (either/left :duplicate))
+    (catch Exception e
+      (either/left (.getMessage e)))))
 
-(defn payload-incomplete?
-  [body]
-  (let [{:keys [event amount currency timestamp]} body]
-    (some nil? [event amount currency timestamp])))
+;; ------------------------
+;; Validation
+;; ------------------------
 
-(defn webhook-handler
-  [request]
-  (let [token (get-in request [:headers "x-webhook-token"])
-        body (:body request)
-        transaction-id (:transaction_id body)]
+(defn missing-fields? [body]
+  (some nil? (map body [:event :amount :currency :timestamp])))
+
+(defn validate-request [req]
+  (let [token (get-in req [:headers "x-webhook-token"])
+        body  (:body req)
+        tx-id (:transaction_id body)]
     (cond
-      (not= token expected-token) {:error "Invalid or missing token"}
-      (nil? transaction-id) {:error "Invalid body request"}
-      (not= "49.90" (:amount body)) {:action :cancel :transaction-id transaction-id :error "Wrong amount" :status 400}
-      (payload-incomplete? body) {:action :cancel :transaction-id transaction-id :error "Payload is incomplete" :status 400}
-      :else {:action :confirm :transaction-id transaction-id})))
+      (not= token "meu-token-secreto")
+      (either/left {:error "Invalid or missing token"})
 
-(defn execute-effects!
-  [{:keys [action transaction-id error]}]
-  (if error
-    (do
-      (when (= action :cancel) (cancel-transaction! transaction-id))
-      (bad-request error))
-    (if (insert-transaction! transaction-id)
-        (do 
-          (confirm-transaction! transaction-id)
-          (response "OK"))
-        (bad-request "Duplicate transaction"))))
+      (nil? tx-id)
+      (either/left {:error "Missing transaction_id"})
 
-(defroutes app-routes
-  (POST "/webhook" request (execute-effects! (webhook-handler request)))
+      (not= "49.90" (:amount body))
+      (either/right {:action :cancel :tx-id tx-id :reason "Wrong amount"})
+
+      (missing-fields? body)
+      (either/right {:action :cancel :tx-id tx-id :reason "Incomplete payload"})
+
+      :else
+      (either/right {:action :confirm :tx-id tx-id}))))
+
+;; ------------------------
+;; Core logic
+;; ------------------------
+
+(defn process-event! [{:keys [action tx-id reason]}]
+  (case action
+    :cancel
+    (m/>>= (cancel-transaction! tx-id)
+           (fn [_] (either/right (bad-request reason))))
+
+    :confirm
+    (m/mlet [_ (save-transaction! tx-id)
+             _ (confirm-transaction! tx-id)]
+            (either/right (response "OK")))))
+
+;; ------------------------
+;; App + Routing
+;; ------------------------
+
+(defn handle-webhook [req]
+  (either/branch
+   (validate-request req)
+   ;; Left handler
+   (fn [{:keys [error]}] (bad-request error))
+   ;; Right handler
+   (fn [event]
+     (either/branch
+      (process-event! event)
+      (fn [err] (bad-request (str err)))
+      identity))))
+
+
+(defroutes routes
+  (POST "/webhook" req (handle-webhook req))
   (not-found "Route not found"))
 
 (def app
-  (-> app-routes
+  (-> routes
       (wrap-json-body {:keywords? true})
       (wrap-json-response)))
 
 (defn -main [& _]
-  (jdbc/execute! db ["DROP TABLE IF EXISTS transactions"])
-  (jdbc/execute! db ["CREATE TABLE transactions (transaction_id TEXT PRIMARY KEY)"])
+  (jdbc/execute! db-spec ["DROP TABLE IF EXISTS transactions"])
+  (jdbc/execute! db-spec ["CREATE TABLE transactions (transaction_id TEXT PRIMARY KEY)"])
 
   (future
-    (run-jetty app
-               {:port 5000
-                :host "0.0.0.0"
-                :join? false}))
+    (run-jetty app {:port 5000 :host "0.0.0.0" :join? false}))
 
   (run-jetty app
              {:ssl? true
@@ -97,4 +129,3 @@
               :keystore "keystore.p12"
               :key-password "changeit"
               :join? true}))
-
